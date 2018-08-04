@@ -1,0 +1,66 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+import sys
+from mtparse import *
+
+def main(argv):
+	if len(argv) == 2:
+		filename = argv[1]
+		#print 'Trying to read config file: %s' % filename
+		config = read_config(filename)
+
+		if not config:
+			#print 'Error reading %s' % filename
+			exit(1)
+
+		for line in read_section(config, '/interface l2tp-client'):
+			d = line_dict(line)
+			if 'user' in d and 'password' in d and 'connect-to' in d:
+				print('l2tp:%s:%s:%s' % (d['connect-to'], d['user'], d['password']))
+
+		for line in read_section(config, '/interface pptp-client'):
+			d = line_dict(line)
+			if 'user' in d and 'password' in d and 'connect-to' in d:
+				print('pptp:%s:%s:%s' % (d['connect-to'], d['user'], d['password']))
+
+		for line in read_section(config, '/interface sstp-client'):
+			d = line_dict(line)
+			if 'user' in d and 'password' in d and 'connect-to' in d:
+				print('sstp:%s:%s:%s' % (d['connect-to'], d['user'], d['password']))
+
+		for line in read_section(config, '/interface pppoe-client'):
+			d = line_dict(line)
+			if 'user' in d and 'password' in d and 'interface' in d:
+				print('pppoe:%s:%s:%s' % (d['interface'], d['user'], d['password']))
+
+		for line in read_section(config, '/interface eoip'):
+			d = line_dict(line)
+			if 'remote-address' in d and 'tunnel-id' in d:
+				print('eoip:%s:%s' % (d['tunnel-id'], d['remote-address']))
+
+		for line in read_section(config, '/interface ipip'):
+			d = line_dict(line)
+			if 'local-address' in d and 'remote-address' in d:
+				print('ipip:%s:%s' % (d['local-address'], d['remote-address']))
+
+		for line in read_section(config, '/interface ovpn-client'):
+			d = line_dict(line)
+			if 'connect-to' in d and 'user' in d:
+				if 'password' in d:
+					password = d['password']
+				else:
+					password = ''
+				if 'port' in d:
+					port = d['port']
+				else:
+					port = 1194
+				if 'certificate' in d:
+					certificate = d['certificate']
+				else:
+					certificate = ''
+				print('ovpn:%s:%s:%s:%s:%s' % (d['connect-to'], port, d['user'], password, certificate))
+
+if __name__ == '__main__':
+	main(sys.argv)
+

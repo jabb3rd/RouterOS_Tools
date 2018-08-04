@@ -1,0 +1,33 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+import sys
+from mtparse import *
+
+def main(argv):
+	if len(argv) == 2:
+		filename = argv[1]
+#		print 'Trying to read config file: %s' % filename
+		config = read_config(filename)
+
+		if not config:
+#			print 'Error reading %s' % filename
+			exit(1)
+
+		for address in read_section(config, '/ip address'):
+			a = line_dict(address)
+
+			disabled = False
+			if 'disabled' in a:
+				if a['disabled'] == 'yes':
+					disabled = True
+
+			if not disabled:
+				comment = ''
+				if 'comment' in a:
+					comment = a['comment']
+				print '%s' % a['address']
+
+if __name__ == '__main__':
+	main(sys.argv)
+
