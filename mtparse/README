@@ -1,0 +1,6 @@
+python -m site
+
+1. Make a subdirectory in one of the directories of the resulting output, e.g. /root/.local/lib/python2.7/site-packages/mtparse
+2. Copy mtparse.py into this directory and rename to __init__.py
+3. Then you will be able to use 'import mtparse' in your projects.
+
