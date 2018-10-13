@@ -28,6 +28,13 @@ MT_STRING     = 0x21
 MT_HASH       = 0x31
 MT_ARRAY      = 0x88
 
+# Message protocol constants
+MT_RECEIVER = 0xff0001
+MT_SENDER = 0xff0002
+MT_REPLY_EXPECTED = 0xff0005
+MT_REQUEST_ID = 0xff0006
+MT_COMMAND = 0xff0007
+
 DEBUG = False
 
 # Global variables
@@ -71,7 +78,10 @@ def m2_parse(stream):
 
 		while pointer < (block_data_start + m2_block_size - 2):
 			# Configuration ID, or keyword_code, is always 3 bytes long
-			keyword_code = struct.unpack('<I', stream[pointer:pointer+3] + b'\x00')[0]
+			try:
+				keyword_code = struct.unpack('<I', stream[pointer:pointer+3] + b'\x00')[0]
+			except:
+				return result
 			pointer += 3
 			# The next is one byte keyword type
 			keyword_type = ord(stream[pointer:pointer+1])
@@ -116,8 +126,6 @@ def m2_parse(stream):
 		result.append(keywords)
 	return result
 
-# wtf?	plugins_dl = b'\x37\x01\x00\x35\x4d\x32\x08\x00\xff\x08\x09\x00\xfe\x00\x03\x00\xff\x09\x02\x04\x00\xff\x09\x02\x06\x00\xff\x09\x01\x01\x00\xff\x88\x02\x00\x00\x00\x00\x00\x0b\x00\x00\x00\x02\x00\xff\x88\x02\x00\x02\x00\x00\x00\x02\x00\x00\x00'
-
 # Generate a stream for the given array of keywords, which are tuples of: (code, type, value)
 def m2_bytes(keywords):
 	result = b''
@@ -151,46 +159,36 @@ def m2_bytes(keywords):
 	return result
 
 # Send the first (list) command
-def mt_pkt_01():
+def mt_req_list():
 	m2 = []
-	m2.append((0xff0005, MT_BOOL, True))
-	m2.append((0xff0006, MT_BYTE, 1))
-	m2.append((0xff0007, MT_BYTE, 7))
-	m2.append((0x000001, MT_STRING, 'list'))
-	m2.append((0xff0002, MT_ARRAY, [0, 11]))
-	m2.append((0xff0001, MT_ARRAY, [2, 2]))
+	m2.append((MT_RECEIVER, MT_ARRAY, [2, 2]))
+	m2.append((MT_COMMAND, MT_BYTE, 7))
+	m2.append((MT_REQUEST_ID, MT_BYTE, 1))
+	m2.append((MT_REPLY_EXPECTED, MT_BOOL, True))
+	m2.append((1, MT_STRING, 'list'))
 	return m2_header(m2_bytes(m2))
 
-# Specify a session ID (got from the 2nd packet)
-def mt_pkt_03(sid):
+def mt_req_challenge(sid):
 	m2 = []
+	m2.append((MT_RECEIVER, MT_ARRAY, [13, 4]))
+	m2.append((MT_COMMAND, MT_BYTE, 4))
+	m2.append((MT_REQUEST_ID, MT_BYTE, 2))
 	m2.append(sid)
-	m2.append((0xff0007, MT_BYTE, 5))
-	m2.append((0xff0002, MT_ARRAY, [0, 11]))
-	m2.append((0xff0001, MT_ARRAY, [2, 2]))
-	return m2_header(m2_bytes(m2))
-
-def mt_pkt_04():
-	m2 = []
-	m2.append((0xff0005, MT_BOOL, True))
-	m2.append((0xff0006, MT_BYTE, 2))
-	m2.append((0xff0007, MT_BYTE, 4))
-	m2.append((0xff0002, MT_ARRAY, [0, 11]))
-	m2.append((0xff0001, MT_ARRAY, [13, 4]))
+	m2.append((MT_REPLY_EXPECTED, MT_BOOL, True))
 	return m2_header(m2_bytes(m2))
 
 # Authorize ourselves to the server
-def mt_pkt_06(login, digest, salt):
+def mt_req_auth(sid, login, digest, salt):
 	m2 = []
-	m2.append((0x00000c, MT_BOOL, False))
-	m2.append((0xff0005, MT_BOOL, False))
-	m2.append((0xff0006, MT_BYTE, 3))
-	m2.append((0xff0007, MT_BYTE, 1))
-	m2.append((0x00000a, MT_HASH, digest))
-	m2.append((0x000009, MT_HASH, salt))
-	m2.append((0x000001, MT_STRING, login))
-	m2.append((0xff0002, MT_ARRAY, [0, 11]))
-	m2.append((0xff0001, MT_ARRAY, [13, 4]))
+	m2.append((MT_RECEIVER, MT_ARRAY, [13, 4]))
+	m2.append((MT_COMMAND, MT_BYTE, 1))
+	m2.append((MT_REQUEST_ID, MT_BYTE, 3))
+	m2.append(sid)
+	m2.append((MT_REPLY_EXPECTED, MT_BOOL, True))
+	m2.append((1, MT_STRING, login))
+	m2.append((9, MT_HASH, salt))
+	m2.append((10, MT_HASH, digest))
+#	m2.append((12, MT_BOOL, False))
 	return m2_header(m2_bytes(m2))
 
 # Get the salt from the 5th packet
@@ -234,7 +232,7 @@ def mt_get_result(packet):
 
 # Try to login using winbox and return the result
 def winbox_login(host, login, password):
-	p1 = mt_pkt_01()
+	p1 = mt_req_list()
 
 	if DEBUG:
 		print(host, '>P1:', binascii.hexlify(p1).decode('UTF-8'))
@@ -270,18 +268,7 @@ def winbox_login(host, login, password):
 		s.close()
 		return AUTH_ERROR
 
-	p3 = mt_pkt_03(sid)
-
-	if DEBUG:
-		print(host, '>P3:', binascii.hexlify(p3).decode('UTF-8'))
-	try:
-		s.send(p3)
-	except:
-		print('[-] %s %s %s [ERROR_P3_SEND]' % (host, login, password))
-		s.close()
-		return AUTH_ERROR
-
-	p4 = mt_pkt_04()
+	p4 = mt_req_challenge(sid)
 
 	if DEBUG:
 		print(host, '>P4:', binascii.hexlify(p4).decode('UTF-8'))
@@ -313,7 +300,7 @@ def winbox_login(host, login, password):
 	d.update(salt)
 	digest = b'\x00' + d.digest()
 
-	p6 = mt_pkt_06(login, digest, salt)
+	p6 = mt_req_auth(sid, login, digest, salt)
 
 	if DEBUG:
 		print(host, '>P6:', binascii.hexlify(p6).decode('UTF-8'))

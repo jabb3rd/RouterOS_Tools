@@ -13,7 +13,7 @@ SLEEP_TIME = 0.5
 M2_HEADER = b'\x4d\x32'
 M2_EXTRA  = b'\x01\x00'
 
-# Winbox protocol types
+# Message protocol types
 MT_BOOL       = 0x00
 MT_BOOL_CODE  = {False: 0x00, True: 0x01}
 MT_BOOL_VALUE = {0x00: False, 0x01: True}
@@ -22,6 +22,13 @@ MT_BYTE       = 0x09
 MT_STRING     = 0x21
 MT_HASH       = 0x31
 MT_ARRAY      = 0x88
+
+# Message protocol constants
+MT_RECEIVER = 0xff0001
+MT_SENDER = 0xff0002
+MT_REPLY_EXPECTED = 0xff0005
+MT_REQUEST_ID = 0xff0006
+MT_COMMAND = 0xff0007
 
 DEBUG = False
 
@@ -196,25 +203,23 @@ def h(msg, data):
 
 def mt_freq_01(filename):
 	m2 = mtPacket()
-	m2.add(0xff0005, MT_BOOL, True)
-	m2.add(0xff0006, MT_BYTE, 7)
-	m2.add(0xff0007, MT_BYTE, 7)
-	m2.add(0x000001, MT_STRING, filename)
-	m2.add(0xff0002, MT_ARRAY, [0, 8])
-	m2.add(0xff0001, MT_ARRAY, [2, 2])
+	m2.add(MT_RECEIVER, MT_ARRAY, [2, 2])
+	m2.add(MT_COMMAND, MT_BYTE, 7)
+	m2.add(MT_REQUEST_ID, MT_BYTE, 1)
+	m2.add(MT_REPLY_EXPECTED, MT_BOOL, True)
+	m2.add(1, MT_STRING, filename)
 	m2.build()
 	return m2
 
 def mt_freq_02(sid):
 	id, type, value = sid
 	m2 = mtPacket()
-	m2.add(0xff0005, MT_BOOL, True)
-	m2.add(0xff0006, MT_BYTE, 0)
+	m2.add(MT_RECEIVER, MT_ARRAY, [2, 2])
+	m2.add(MT_COMMAND, MT_BYTE, 4)
+	m2.add(MT_REQUEST_ID, MT_BYTE, 1)
 	m2.add(id, type, value)
-	m2.add(0x000002, MT_DWORD, 0x8000)
-	m2.add(0xff0007, MT_BYTE, 4)
-	m2.add(0xff0002, MT_ARRAY, [0, 8])
-	m2.add(0xff0001, MT_ARRAY, [2, 2])
+	m2.add(MT_REPLY_EXPECTED, MT_BOOL, True)
+	m2.add(2, MT_DWORD, 0x8000)
 	m2.build()
 	return m2
 
