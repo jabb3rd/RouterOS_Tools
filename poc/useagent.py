@@ -159,6 +159,45 @@ def mt_proxy_request(host, port, send1, recv1):
 		m2.append((8, MT_STRING, recv1))
 	return m2_header(m2_bytes(m2))
 
+def has_keyword(data, a_code, a_type):
+	parsed_data = m2_parse(data)
+
+	if parsed_data is None:
+		return None
+
+	for block in parsed_data:
+		for keyword in block:
+			code, type, value = keyword
+			if code == a_code and type == a_type:
+				return True
+	return False
+
+def get_value(data, a_code, a_type):
+	parsed_data = m2_parse(data)
+
+	if parsed_data is None:
+		return None
+
+	for block in parsed_data:
+		for keyword in block:
+			code, type, value = keyword
+			if type in MT_BOOL_CODE:
+				if code == a_code:
+					return MT_BOOL_VALUE[value]
+				else:
+					return None
+			elif code == a_code and type == a_type:
+				return value
+	return None
+
+def dump_packet(packet):
+	packet_data = m2_parse(packet)
+	if packet_data is not None:
+		for block in packet_data:
+			for keyword in block:
+				code, type, value = keyword
+				print(code, type, value)
+
 def do(proxy_host, proxy_port, target_host, target_port, send1, recv1):
 	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	try:
@@ -170,17 +209,11 @@ def do(proxy_host, proxy_port, target_host, target_port, send1, recv1):
 		exit()
 
 	request = mt_proxy_request(target_host, target_port, send1, recv1)
-
-	request_data = m2_parse(request)
-	if request_data is not None:
-		if DEBUG:
-			print('\nM2 parsed request:')
-			for block in request_data:
-				for keyword in block:
-					code, type, value = keyword
-					print(code, type, value)
-
-	print('>>>', hexlify(request).decode('UTF-8'), '\n')
+	if DEBUG:
+		print('>>>', hexlify(request).decode('UTF-8'), '\n')
+		print('M2 parse of the request:')
+		dump_packet(request)
+		print()
 
 	try:
 		s.send(request)
@@ -198,19 +231,16 @@ def do(proxy_host, proxy_port, target_host, target_port, send1, recv1):
 		s.close()
 		exit()
 
-	print('<<<', hexlify(read).decode('UTF-8'), '\n')
+	if DEBUG:
+		print('<<<', hexlify(read).decode('UTF-8'), '\n')
+		print('M2 parse of the response:')
+		dump_packet(read)
+		print()
 
-	read_data = m2_parse(read)
-	if read_data is not None:
-		if DEBUG:
-			print('M2 parsed result:')
-		for block in read_data:
-			for keyword in block:
-				code, type, value = keyword
-				if code == 0xff0008 and type == MT_DWORD:
-					print('ERROR: %s' % value)
-				if DEBUG:
-					print(code, type, value)
+	if get_value(read, 0xff0008, MT_DWORD) is not None:
+		print('[-] Error occured')
+	elif get_value(read, 13, MT_BOOL):
+		print('[+] Success!')
 
 	s.close()
 
