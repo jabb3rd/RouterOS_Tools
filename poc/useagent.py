@@ -28,9 +28,6 @@ MT_COMMAND = 0xff0007
 def ip2dword(addr):
 	return struct.unpack("<I", socket.inet_aton(addr))[0]
 
-def dword2ip(addr):
-	return socket.inet_ntoa(struct.pack("<I", addr))
-
 # Add M2 header and sizes to the stream (there's no check if size exceeds one 255)
 def m2_header(stream):
 	size = len(stream)
@@ -159,19 +156,6 @@ def mt_proxy_request(host, port, send1, recv1):
 		m2.append((8, MT_STRING, recv1))
 	return m2_header(m2_bytes(m2))
 
-def has_keyword(data, a_code, a_type):
-	parsed_data = m2_parse(data)
-
-	if parsed_data is None:
-		return None
-
-	for block in parsed_data:
-		for keyword in block:
-			code, type, value = keyword
-			if code == a_code and type == a_type:
-				return True
-	return False
-
 def get_value(data, a_code, a_type):
 	parsed_data = m2_parse(data)
 
@@ -237,8 +221,14 @@ def do(proxy_host, proxy_port, target_host, target_port, send1, recv1):
 		dump_packet(read)
 		print()
 
-	if get_value(read, 0xff0008, MT_DWORD) is not None:
-		print('[-] Error occured')
+
+	error = get_value(read, 0xff0008, MT_DWORD)
+	if error is not None:
+		error_description = get_value(read, 0xff0009, MT_STRING)
+		if error_description is not None:
+			print('[-] Error: %s [%s]' % (error, error_description))
+		else:
+			print('[-] Error: %s' % error)
 	elif get_value(read, 13, MT_BOOL):
 		print('[+] Success!')
 
