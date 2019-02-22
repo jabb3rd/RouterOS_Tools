@@ -25,6 +25,11 @@ MT_REPLY_EXPECTED = 0xff0005
 MT_REQUEST_ID = 0xff0006
 MT_COMMAND = 0xff0007
 
+# Resulting error codes
+EXIT_OK = 0
+EXIT_ERROR = 1
+EXIT_UNKNOWN = 2
+
 def ip2dword(addr):
 	return struct.unpack("<I", socket.inet_aton(addr))[0]
 
@@ -182,7 +187,8 @@ def dump_packet(packet):
 				code, type, value = keyword
 				print(code, type, value)
 
-def do(proxy_host, proxy_port, target_host, target_port, send1, recv1):
+def do(proxy_host, proxy_port, target_host, target_port, send, receive):
+	result = EXIT_UNKNOWN
 	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	try:
 		s.connect((proxy_host, int(proxy_port)))
@@ -190,40 +196,35 @@ def do(proxy_host, proxy_port, target_host, target_port, send1, recv1):
 	except:
 		print('[-] Cannot connect to %s:%s' % (proxy_host, proxy_port))
 		s.close()
-		exit()
-
-	request = mt_proxy_request(target_host, target_port, send1, recv1)
+		return EXIT_ERROR
+	request = mt_proxy_request(target_host, target_port, send, receive)
 	if DEBUG:
 		print('>>>', hexlify(request).decode('UTF-8'), '\n')
 		print('M2 parse of the request:')
 		dump_packet(request)
 		print()
-
 	try:
 		s.send(request)
-		print('[+] Request completed')
+		print('[+] Request to %s:%s proxied via %s:%s' % (target_host, target_port, proxy_host, proxy_port))
 	except:
-		print('[-] Request failed')
+		print('[-] Request to %s:%s failed via %s:%s' % (target_host, target_port, proxy_host, proxy_port))
 		s.close()
-		exit()
-
+		return EXIT_ERROR
 	try:
 		read = s.recv(1024)
-		print('[+] Response read completed')
+		print('[+] Response read from %s:%s completed' % (proxy_host, proxy_port))
 	except:
-		print('[-] Response read failed')
+		print('[-] Response read from %s:%s failed' % (proxy_host, proxy_port))
 		s.close()
-		exit()
-
+		return EXIT_ERROR
 	if DEBUG:
 		print('<<<', hexlify(read).decode('UTF-8'), '\n')
 		print('M2 parse of the response:')
 		dump_packet(read)
 		print()
-
-
 	error = get_value(read, 0xff0008, MT_DWORD)
 	if error is not None:
+		result = EXIT_ERROR
 		error_description = get_value(read, 0xff0009, MT_STRING)
 		if error_description is not None:
 			print('[-] Error: %s [%s]' % (error, error_description))
@@ -231,8 +232,9 @@ def do(proxy_host, proxy_port, target_host, target_port, send1, recv1):
 			print('[-] Error: %s' % error)
 	elif get_value(read, 13, MT_BOOL):
 		print('[+] Success!')
-
+		result = EXIT_OK
 	s.close()
+	return result
 
 DEBUG = False
 proxy_port = 8291
@@ -241,13 +243,13 @@ receive = ''
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='description')
-	parser.add_argument('-X', '--proxy-host', required = True)
-	parser.add_argument('-P', '--proxy-port', required = False)
-	parser.add_argument('-t', '--target-host', required = True)
-	parser.add_argument('-p', '--target-port', required = True)
-	parser.add_argument('-s', '--send', required = False)
-	parser.add_argument('-r', '--receive', required = False)
-	parser.add_argument('--debug', action = 'store_true', required = False)
+	parser.add_argument('-X', '--proxy-host', help = 'A proxy host IP address to connect to', required = True)
+	parser.add_argument('-P', '--proxy-port', help = 'A proxy winbox port number to connect to (default = 8291)', required = False)
+	parser.add_argument('-t', '--target-host', help = 'A target host address to make a TCP-probe to', required = True)
+	parser.add_argument('-p', '--target-port', help = 'A target TCP port to make a probe to', required = True)
+	parser.add_argument('-s', '--send', help = 'A request data to send to the target', required = False)
+	parser.add_argument('-r', '--receive', help = 'A regexp to match the response data', required = False)
+	parser.add_argument('--debug', action = 'store_true', help = 'Display the debugging info', required = False)
 	args = vars(parser.parse_args())
 
 	proxy_host = args['proxy_host']
@@ -259,12 +261,9 @@ if __name__ == '__main__':
 		send = decode(args['send'], 'unicode_escape')
 	if args['receive']:
 		receive = decode(args['receive'], 'unicode_escape')
-
 	if args['debug']:
 		DEBUG = True
 
-#	send = 'GET / HTTP/1.1\r\nHost: %s\r\nUser-Agent: Oops\r\nAccept: */*\r\n\r\n' % target_host
-#	recv = '^HTTP/1.1 200 Ok\r\nServer: micro_httpd'
-
-	print(repr(send), repr(receive))
-	do(proxy_host, proxy_port, target_host, target_port, send, receive)
+	print('Send:', repr(send), '\nReceive (regex):', repr(receive))
+	result = do(proxy_host, proxy_port, target_host, target_port, send, receive)
+	exit(result)
