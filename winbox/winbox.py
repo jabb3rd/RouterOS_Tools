@@ -219,12 +219,18 @@ class mtMessage(object):
 		self.raw = raw
 
 	# Set a receiver, which will handle a request
-	def set_receiver(self, handler, subhandler):
-		self.add(MT_RECEIVER, MT_DWORD_ARRAY, [handler, subhandler])
+	def set_receiver(self, handler, subhandler = None):
+		if subhandler is None:
+			self.add(MT_RECEIVER, MT_DWORD_ARRAY, [handler])
+		else:
+			self.add(MT_RECEIVER, MT_DWORD_ARRAY, [handler, subhandler])
 
 	# Set a sender, which sends a request
-	def set_sender(self, handler, subhandler):
-		self.add(MT_SENDER, MT_DWORD_ARRAY, [handler, subhandler])
+	def set_sender(self, handler, subhandler = None):
+		if subhandler is None:
+			self.add(MT_SENDER, MT_DWORD_ARRAY, [handler])
+		else:
+			self.add(MT_SENDER, MT_DWORD_ARRAY, [handler, subhandler])
 
 	# Set a command to execute
 	def set_command(self, command):
@@ -634,10 +640,6 @@ class mtFileRequest(object):
 		self.error = result.get_value(0xff0008, MT_DWORD)
 		if self.error == 0xfe0006:
 			self.error_description = result.get_value(0xff0009, MT_STRING)
-			#error_description = result.get_value(0xff0009, MT_STRING)
-			#if not error_description:
-			#	error_description = ''
-			#print('[-] Error: %s [%s]' % (hex(error), error_description.decode()))
 			return False
 		elif self.error is not None:
 			return False
@@ -666,11 +668,7 @@ class mtFileRequest(object):
 			msg.set_receiver(2, 2)
 			pkt = mtPacket(msg.build())
 			self.session.send(pkt)
-
-			msg.clear()
-			pkt.clear()
 			sleep(0.1)
-
 			part_buffer = BytesIO()
 			part_done = False
 			while not part_done:
@@ -690,6 +688,9 @@ class mtFileRequest(object):
 				file_done = True
 			self.buffer.write(part_data)
 		return self.buffer.getvalue()
+
+def ip2dword(addr):
+        return struct.unpack('<I', inet_aton(addr))[0]
 
 def h(msg, data):
 	print(msg, hexlify(data).decode())
