@@ -1,0 +1,15 @@
+#!/bin/bash
+LOG="out.log"
+
+[ "$2" == "" ] && exit 0
+
+host=$1
+user=$2
+pass=$3
+
+expect <<END
+set timeout 10
+spawn wine winbox.exe $host $user "$pass"
+expect "logged in!!!" { puts [open $LOG a+] "$user@$host:$pass" }
+END
+

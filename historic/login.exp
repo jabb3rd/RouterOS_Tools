@@ -1,0 +1,16 @@
+#!/usr/bin/expect
+set timeout 10
+set ip [lindex $argv 0]
+
+spawn telnet $ip
+expect "'^]'."
+sleep .1
+
+expect "Login:"
+send "admin+t\r"
+expect "Password:"
+send "\r"
+expect " > "
+send "quit\r"
+
+
