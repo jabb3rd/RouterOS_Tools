@@ -7,7 +7,6 @@ from multiprocessing import Pool
 AUTH_GOOD  = 0
 AUTH_BAD   = 1
 AUTH_ERROR = 2
-AUTH_NONE  = 3
 AUTH_RESULT_CODES = ['GOOD', 'BAD', 'ERROR']
 TIMEOUT = 5
 DEFAULT_CREDS = ('admin', '')
