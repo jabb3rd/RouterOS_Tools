@@ -201,7 +201,7 @@ def bruteforce(target):
 		if code == AUTH_GOOD:
 			if stop_after_good:
 				return result
-		elif code == AUTH_ERROR or code == AUTH_NONE:
+		elif code == AUTH_ERROR:
 			break
 	return result
 
