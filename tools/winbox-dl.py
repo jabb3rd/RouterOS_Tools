@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# https://github.com/jabberd/winbox
+# https://github.com/jabb3rd/winbox
 from winbox.session import *
 from winbox.filerequest import *
 
