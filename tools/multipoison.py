@@ -4,7 +4,7 @@ import argparse, struct, time
 from multiprocessing import Pool
 from socket import *
 
-# https://github.com/jabberd/winbox
+# https://github.com/jabb3rd/winbox
 from winbox.tcpsession import *
 from winbox.message import *
 from winbox.packet import *
