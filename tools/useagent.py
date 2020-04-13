@@ -7,7 +7,7 @@ import argparse
 from binascii import hexlify, unhexlify
 from codecs import decode
 
-# https://github.com/jabberd/winbox
+# https://github.com/jabb3rd/winbox
 from winbox.agent import *
 
 # Resulting error codes
