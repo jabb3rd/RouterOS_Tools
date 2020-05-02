@@ -8,4 +8,4 @@ winbox-brute-exe.py | Multi-threaded Winbox credentials bruteforcer (using winbo
 winbox-extract-passwords.py	| Multi-threaded Winbox credentials extractor (using winbox exploit)
 wpf.py | Read credentials from wirelessprofile.dat
 
-New variants of the scripts use https://github.com/jabberd/winbox as a library.
+New variants of the scripts use https://github.com/jabb3rd/winbox as a library.
